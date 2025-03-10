@@ -9,7 +9,7 @@ This driver has SQLite embedded, you don't need to install one separately.
 
 ```go
 import (
-  "github.com/glebarez/sqlite"
+  "github.com/Tryanks/gorm-sqlite"
   "gorm.io/gorm"
 )
 

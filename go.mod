@@ -1,4 +1,4 @@
-module github.com/glebarez/sqlite
+module github.com/Tryanks/gorm-sqlite
 
 go 1.24
 

@@ -48,8 +48,8 @@ jobs:
       # note portable syntax of sed (both GNU and BSD version work with -i.bak cheat, see https://stackoverflow.com/a/44864004
       run: |
         sed -i.bak '/gorm.io\/driver\/sqlite/d' go.mod
-        echo "replace github.com/glebarez/sqlite => ../../sqlite/" >> go.mod
-        sed -i.bak 's:gorm.io/driver/sqlite:github.com/glebarez/sqlite:g' tests_test.go
+        echo "replace github.com/Tryanks/gorm-sqlite => ../../sqlite/" >> go.mod
+        sed -i.bak 's:gorm.io/driver/sqlite:github.com/Tryanks/gorm-sqlite:g' tests_test.go
         go mod tidy
         cat go.mod
 
