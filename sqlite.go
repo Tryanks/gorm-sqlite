@@ -3,11 +3,11 @@ package sqlite
 import (
 	"context"
 	"database/sql"
+	"reflect"
 	"strconv"
 
 	"gorm.io/gorm/callbacks"
 
-	gosqlite "github.com/glebarez/go-sqlite"
 	sqlite3 "modernc.org/sqlite/lib"
 
 	"gorm.io/gorm"
@@ -236,18 +236,50 @@ func (dialectopr Dialector) RollbackTo(tx *gorm.DB, name string) error {
 }
 
 func (dialector Dialector) Translate(err error) error {
-	switch terr := err.(type) {
-	case *gosqlite.Error:
-		switch terr.Code() {
-		case sqlite3.SQLITE_CONSTRAINT_UNIQUE:
-			return gorm.ErrDuplicatedKey
-		case sqlite3.SQLITE_CONSTRAINT_PRIMARYKEY:
-			return gorm.ErrDuplicatedKey
-		case sqlite3.SQLITE_CONSTRAINT_FOREIGNKEY:
-			return gorm.ErrForeignKeyViolated
-		}
+	if err == nil {
+		return nil
 	}
-	return err
+
+	errorValue := reflect.ValueOf(err)
+	if errorValue.Kind() == reflect.Ptr && !errorValue.IsNil() {
+		errorValue = errorValue.Elem()
+	}
+
+	codeMethod := errorValue.MethodByName("Code")
+
+	if !codeMethod.IsValid() && errorValue.Kind() != reflect.Ptr && errorValue.CanAddr() {
+		codeMethod = errorValue.Addr().MethodByName("Code")
+	}
+
+	if !codeMethod.IsValid() || codeMethod.Type().NumIn() != 0 || codeMethod.Type().NumOut() != 1 {
+		return err
+	}
+
+	returnType := codeMethod.Type().Out(0)
+	isIntegerType := false
+
+	switch returnType.Kind() {
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		isIntegerType = true
+	default:
+		isIntegerType = false
+	}
+
+	if !isIntegerType {
+		return err
+	}
+
+	methodResult := codeMethod.Call(nil)[0].Interface()
+	sqliteErrorCode := int(reflect.ValueOf(methodResult).Int())
+
+	switch sqliteErrorCode {
+	case sqlite3.SQLITE_CONSTRAINT_UNIQUE, sqlite3.SQLITE_CONSTRAINT_PRIMARYKEY:
+		return gorm.ErrDuplicatedKey
+	case sqlite3.SQLITE_CONSTRAINT_FOREIGNKEY:
+		return gorm.ErrForeignKeyViolated
+	default:
+		return err
+	}
 }
 
 func compareVersion(version1, version2 string) int {
