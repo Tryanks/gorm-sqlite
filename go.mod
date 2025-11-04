@@ -3,7 +3,7 @@ module github.com/Tryanks/gorm-sqlite
 go 1.24.0
 
 require (
-	gorm.io/gorm v1.31.0
+	gorm.io/gorm v1.31.1
 	modernc.org/sqlite v1.40.0
 )
 
