@@ -66,7 +66,7 @@ jobs:
 
     - name: save tests results
       if: ${{ always() }}
-      uses: actions/upload-artifact@v4 
+      uses: actions/upload-artifact@v5 
       with:
         name: ${{ runner.os }}-${{ matrix.go }}-tests.out
         path: ./gorm/tests/${{ runner.os }}-${{ matrix.go }}-tests.out
