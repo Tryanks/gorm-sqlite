@@ -24,6 +24,6 @@ jobs:
         check-latest: true
     - run: go version
     
-    - uses: actions/checkout@v5
+    - uses: actions/checkout@v6
     - name: Test
       run: go test -v -cover .
