@@ -1,0 +1,82 @@
+name: Dependabot Auto Merge
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  auto-merge:
+    runs-on: ubuntu-latest
+    if: github.actor == 'dependabot[bot]'
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Enable auto-merge for Dependabot PRs
+        run: gh pr merge --auto --squash "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Get latest tag and calculate new version
+        id: version
+        run: |
+          # Get the latest tag matching v*.*.* pattern
+          LATEST_TAG=$(git tag -l 'v*.*.*' | sort -V | tail -n 1)
+          
+          if [ -z "$LATEST_TAG" ]; then
+            echo "No existing version tag found, starting with v0.0.1"
+            NEW_TAG="v0.0.1"
+          else
+            echo "Latest tag: $LATEST_TAG"
+            # Extract version numbers
+            VERSION=${LATEST_TAG#v}
+            MAJOR=$(echo $VERSION | cut -d. -f1)
+            MINOR=$(echo $VERSION | cut -d. -f2)
+            PATCH=$(echo $VERSION | cut -d. -f3)
+            
+            # Increment patch version
+            NEW_PATCH=$((PATCH + 1))
+            NEW_TAG="v${MAJOR}.${MINOR}.${NEW_PATCH}"
+          fi
+          
+          echo "New tag will be: $NEW_TAG"
+          echo "new_tag=$NEW_TAG" >> $GITHUB_OUTPUT
+
+      - name: Wait for PR to be merged
+        run: |
+          echo "Waiting for PR to be merged..."
+          for i in {1..30}; do
+            PR_STATE=$(gh pr view "$PR_URL" --json state --jq '.state')
+            if [ "$PR_STATE" == "MERGED" ]; then
+              echo "PR has been merged!"
+              exit 0
+            fi
+            echo "PR state: $PR_STATE, waiting..."
+            sleep 10
+          done
+          echo "Timeout waiting for PR to merge"
+          exit 1
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Fetch latest changes after merge
+        run: |
+          git fetch origin
+          git checkout ${{ github.event.pull_request.base.ref }}
+          git pull origin ${{ github.event.pull_request.base.ref }}
+
+      - name: Create and push new tag
+        run: |
+          git tag ${{ steps.version.outputs.new_tag }}
+          git push origin ${{ steps.version.outputs.new_tag }}
+          echo "Successfully created and pushed tag: ${{ steps.version.outputs.new_tag }}"
