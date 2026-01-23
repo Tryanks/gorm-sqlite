@@ -3,6 +3,8 @@ name: Dependabot Auto Merge
 on:
   pull_request:
     types: [opened, synchronize, reopened]
+  push:
+    branches: [master]
 
 permissions:
   contents: write
@@ -80,3 +82,58 @@ jobs:
           git tag ${{ steps.version.outputs.new_tag }}
           git push origin ${{ steps.version.outputs.new_tag }}
           echo "Successfully created and pushed tag: ${{ steps.version.outputs.new_tag }}"
+
+  tag-on-push:
+    runs-on: ubuntu-slim
+    if: github.actor != 'dependabot[bot]'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Check if HEAD already has a tag
+        id: head_tag
+        run: |
+          if git tag --points-at HEAD | grep -q '^v'; then
+            echo "has_tag=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_tag=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Get latest tag and calculate new version
+        if: steps.head_tag.outputs.has_tag == 'false'
+        id: version
+        run: |
+          # Get the latest tag matching v*.*.* pattern
+          LATEST_TAG=$(git tag -l 'v*.*.*' | sort -V | tail -n 1)
+          
+          if [ -z "$LATEST_TAG" ]; then
+            echo "No existing version tag found, starting with v0.0.1"
+            NEW_TAG="v0.0.1"
+          else
+            echo "Latest tag: $LATEST_TAG"
+            # Extract version numbers
+            VERSION=${LATEST_TAG#v}
+            MAJOR=$(echo $VERSION | cut -d. -f1)
+            MINOR=$(echo $VERSION | cut -d. -f2)
+            PATCH=$(echo $VERSION | cut -d. -f3)
+            
+            # Increment patch version
+            NEW_PATCH=$((PATCH + 1))
+            NEW_TAG="v${MAJOR}.${MINOR}.${NEW_PATCH}"
+          fi
+          
+          echo "New tag will be: $NEW_TAG"
+          echo "new_tag=$NEW_TAG" >> $GITHUB_OUTPUT
+
+      - name: Create and push new tag
+        if: steps.head_tag.outputs.has_tag == 'false'
+        run: |
+          git tag ${{ steps.version.outputs.new_tag }}
+          git push origin ${{ steps.version.outputs.new_tag }}
+          echo "Successfully created and pushed tag: ${{ steps.version.outputs.new_tag }}"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
